@@ -1,0 +1,102 @@
+<?xml version="1.0"?>
+<!-- phing -buildfile build.xml -Dargs.recordid=2 -->
+<project name="DigiPhloy" default="finalize" description="This is an example buildfile for Phing.">
+
+<target name="initialize">
+        <echo msg="Setting environment variables" />
+	<!--  include our custom task --> 
+  	<echo>Loading external phing libraries</echo>
+	<includepath classpath="lib" /> 
+  	<taskdef name="ZMySqlGetRecord" classname="ZMySqlGetRecordTask" /> 
+  	<taskdef name="ZMySqlCopyFiles" classname="ZMySqlCopyFiles" />
+	<taskdef name="ZMySqlCopyData" classname="ZMySqlCopyData" />
+	<property file="build.properties" />
+	<echo>Loading deploysettings from mysql</echo> 
+  	<ZMySqlGetRecord recordID="${args.recordid}" hostname="${mysql.hostname}" db="${mysql.db}" sqluser="${mysql.sqluser}" sqlpassword="${mysql.sqlpassword}" /> 
+	<echo>Setting Environment variables</echo>
+	<tstamp prefix="mytime">
+  		<format property="DATE" pattern="%Y%m%d%H%M%S" locale="nl_NL" /> 
+  	</tstamp>
+
+        <property name="build.webDir" value="/home/${mysqlconfig.web_user}/domains/${mysqlconfig.web_domain}/public_html" override="true" /><!-- apache folder -->
+        <property name="build.releasesDir" value="/home/${mysqlconfig.web_user}/releases/${mysqlconfig.web_domain}" override="true" /><!-- root folder with all deploys -->
+        <property name="build.releaseDir" value="${build.releasesDir}/${mytime.DATE}" override="true" /><!-- final package folder -->
+        <property name="build.tmpDir" value="/home/${mysqlconfig.web_user}/tmp/${mysqlconfig.web_domain}" override="true" /><!-- tmp package folder -->
+        
+	<exec command="readlink -f ${build.webDir}" outputProperty="build.prevDir" /><!--previous live link -->
+</target>
+
+<target name="check" depends="initialize">
+        <echo>Check deploy settings</echo>
+	<echo>Check if Apache folder already exists:${build.webDir}</echo> 
+	<if>
+ 		<available file="${build.webDir}" type="dir" followSymlinks="true" /> 
+		<then>
+			<echo>The apache folder exists</echo>
+		</then>
+		<else>
+  			<fail message="Create the webshosting location in the control panel" /> 
+  		</else>
+  	</if>
+</target>
+
+<target name="prepare" depends="check">
+        <echo>Prepare Environment</echo>
+	<echo>Check if the tmpfolder already exists:${build.tmpDir}</echo>
+        <if>
+                <available file="${build.tmpDir}" type="dir" followSymlinks="true" />
+                <then>
+                        <echo>The tmp folder exists -> clean</echo>
+			<delete dir="${build.tmpDir}" includeemptydirs="true" verbose="false" failonerror="true" />
+                </then>
+                <else>
+			<echo>The tmp folder does not exists -> create</echo>
+			<mkdir dir="${build.tmpDir}" />
+                </else>
+        </if>
+</target>
+
+<target name="preparepackage" depends="prepare">
+        <echo>Creating the new deployment package in the temp folder</echo>
+	<!--Download content from Git-->
+	<echo>Download latest source from Git...</echo>
+<!-- <exec command="git clone ${mysqlconfig.repo_location} ${build.tmpDir} -b ${mysqlconfig.repo_checkoutparams} " />
+<echo>git clone ${mysqlconfig.repo_location} ${build.tmpDir} -b ${mysqlconfig.repo_checkoutparams}</echo>
+-->
+	<gitclone repository="${mysqlconfig.repo_location}" targetPath="${build.tmpDir}" bare="false" /> 
+	<echo>Checking out: "${mysqlconfig.repo_checkoutparams}"</echo>
+	<gitcheckout repository="${build.tmpDir}" branchname="${mysqlconfig.repo_checkoutparams}" quiet="true" /> 
+
+        <!--Copy user generated content from live folder-->
+        <ZMySqlCopyData recordID="${args.recordid}" hostname="${mysql.hostname}" db="${mysql.db}" sqluser="${mysql.sqluser}" sqlpassword="${mysql.sqlpassword}"  fromfolder="${build.prevDir}" tofolder="${build.tmpDir}" />
+
+	<!--Copy configuration files-->
+	<echo>Copy the configuration files from the mysql deploy database</echo>
+	<ZMySqlCopyFiles recordID="${args.recordid}" hostname="${mysql.hostname}" db="${mysql.db}" sqluser="${mysql.sqluser}" sqlpassword="${mysql.sqlpassword}" rootfolder="${build.tmpDir}" /> 
+
+</target>
+
+<target name="deploypackage" depends="preparepackage">
+        <echo>Deploying the application to the webserver and activate</echo>
+	<echo>Copy the tmp folder to the final folder:</echo>
+	<mkdir dir="${build.releaseDir}" /> 
+	<copy todir="${build.releaseDir}">
+  		<fileset dir="${build.tmpDir}" defaultexcludes="false" /> 
+  	</copy>
+        <echo>Delete previous build:</echo>
+        <exec command='for deletedir in ${build.releasesDir}/*; do echo "${deletedir}"; done | sort -r -n | tail -n +5 | xargs -I "%" rm -Rf "%";' />
+
+</target>
+
+<target name="activate" depends="deploypackage">
+        <echo>Activating deployment</echo>
+	<symlink link="${build.webDir}" target="${build.releaseDir}" overwrite="true" />
+	<echo>Restart apache</echo>
+	<exec command="/opt/httpdupdate.sh"  />
+</target>
+
+<target name="finalize" depends="activate">
+        <echo>We are done. Goodbye!</echo>
+</target>
+
+</project>
