@@ -20,31 +20,31 @@ class ZMySqlCopyFiles extends Task {
 		$this->recordid = $str;
 	}
 	/**
-	 * The setter for the attribute "recordid"
+	 * The setter for the attribute "hostname"
 	 */
 	public function sethostname($str) {
 		$this->hostname = $str;
 	}
 	/**
-	 * The setter for the attribute "recordid"
+	 * The setter for the attribute "db"
 	 */
 	public function setdb($str) {
 		$this->db = $str;
 	}
 	/**
-	 * The setter for the attribute "recordid"
+	 * The setter for the attribute "sqluser"
 	 */
 	public function setsqluser($str) {
 		$this->sqluser = $str;
 	}
 	/**
-	 * The setter for the attribute "recordid"
+	 * The setter for the attribute "sqlpassword"
 	 */
 	public function setsqlpassword($str) {
 		$this->sqlpassword = $str;
 	}
 	/**
-	 * The setter for the attribute "recordid"
+	 * The setter for the attribute "rootfolder"
 	 */
 	public function setrootfolder($str) {
 		$this->rootfolder = $str;
